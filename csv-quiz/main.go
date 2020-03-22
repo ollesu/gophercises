@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 type problem struct {
@@ -15,6 +16,8 @@ type problem struct {
 
 func main() {
 	csvFileName := flag.String("csv", "problems.csv", "a csv file with the guiz")
+
+	timeLimit := flag.Int("limit", 30, "time limit for the quiz in seconds")
 	flag.Parse()
 
 	file, err := os.Open(*csvFileName)
@@ -33,17 +36,30 @@ func main() {
 	problems := parseLines(lines)
 	fmt.Println(problems)
 
+	timer := time.NewTimer(time.Duration(*timeLimit) * time.Second)
+	// waiting for a message from the channel, this receives a value from the channel
+	// at this point our code will block until it receives a msg from the channel
+
 	correct := 0
 	for i, problem := range problems {
 		fmt.Printf("Problem #%d: %s = \n", i+1, problem.question)
-		var answer string
-		fmt.Scanf("%s\n", &answer)
-		if answer == problem.answer {
-			correct++
+		answerCh := make(chan string)
+		go func() {
+			var answer string
+			fmt.Scanf("%s\n", &answer)
+			answerCh <- answer
+		}()
+
+		select {
+		case <-timer.C:
+			fmt.Printf("\nYou scored %d out of %d\n", correct, len(problems))
+			return
+		case answer := <-answerCh:
+			if answer == problem.answer {
+				correct++
+			}
 		}
 	}
-
-	fmt.Printf("You scored %d out of %d\n", correct, len(problems))
 }
 
 func parseLines(lines [][]string) []problem {
